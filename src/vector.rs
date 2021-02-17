@@ -11,7 +11,20 @@ pub struct Vector {
 
 impl Vector {
     pub fn len(self) -> float {
+        self.len2().sqrt()
+    }
+
+    pub fn len2(self) -> float {
         self.dot(self)
+    }
+
+    pub fn normalized(self) -> Self {
+        let len = self.len();
+        Self {
+            x: self.x / len,
+            y: self.y / len,
+            z: self.z / len,
+        }
     }
 
     pub fn dot(self, other: Self) -> float {

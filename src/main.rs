@@ -19,7 +19,7 @@ use winit_input_helper::WinitInputHelper;
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 480;
 
-fn raytrace(direction: Vector, objects: &[object::Sphere]) -> [u8; 4] {
+fn raytrace_first_hit(direction: Vector, objects: &[object::Sphere]) -> Option<(f32, usize)> {
     // debug_assert!(direction.is_nonzero());
 
     let mut closest = None;
@@ -29,9 +29,9 @@ fn raytrace(direction: Vector, objects: &[object::Sphere]) -> [u8; 4] {
 
         let dot_prod = sphere.center.dot(direction);
 
-        let a = direction.len();
+        let a = direction.len2();
         let b = 2.0 * dot_prod;
-        let c = sphere.center.len() - sphere.radius.powi(2);
+        let c = sphere.center.len2() - sphere.radius.powi(2);
         let d = b * b - 4.0 * a * c;
 
         if d <= 0.0 {
@@ -55,23 +55,29 @@ fn raytrace(direction: Vector, objects: &[object::Sphere]) -> [u8; 4] {
         }
     }
 
-    if let Some((_dist, i)) = closest {
+    closest
+}
+
+fn raytrace(direction: Vector, objects: &[object::Sphere]) -> [u8; 4] {
+    if let Some((distance, i)) = raytrace_first_hit(direction, objects) {
+        let c = (0xff as float * (1.2-distance).powf(1.1)).clamp(0.0, 255.0) as u8;
+
         return match i {
-            0 => [0xff, 0x00, 0x00, 0xff],
-            1 => [0x00, 0xff, 0x00, 0xff],
-            2 => [0x00, 0x00, 0xff, 0xff],
-            _ => [0xff, 0xff, 0xff, 0xff],
+            0 => [c, 0x00, 0x00, 0xff],
+            1 => [0x00, c, 0x00, 0xff],
+            2 => [0x00, 0x00, c, 0xff],
+            _ => [c, c, c, 0xff],
         };
+
     } else {
         [0x00, 0x00, 0x00, 0xff]
-
     }
 }
 
 fn main() -> Result<(), Error> {
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
-    let mut time_start = Instant::now();
+    let time_start = Instant::now();
     let window = {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
         WindowBuilder::new()
@@ -110,12 +116,6 @@ fn main() -> Result<(), Error> {
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-            // update
-            let t = (time_start.elapsed().as_micros() as float) / 1_000_000.0;
-            objects[1].center.x = 1.0 + t.sin() * 0.3;
-            objects[1].center.y = 0.0;
-            objects[1].center.z = t.cos() * 0.3;
-
             // draw
 
             let frame = pixels.get_frame();
@@ -176,6 +176,18 @@ fn main() -> Result<(), Error> {
             if let Some(size) = input.window_resized() {
                 pixels.resize(size.width, size.height);
             }
+
+
+            // update
+            let t = (time_start.elapsed().as_micros() as float) / 1_000_000.0;
+
+            objects[1].center.x = 1.0 + t.sin() * 0.3;
+            objects[1].center.y = 0.0;
+            objects[1].center.z = t.cos() * 0.3;
+
+            objects[2].center.x = 1.0 + (t + 3.14).sin() * 0.3;
+            objects[2].center.y = 0.0;
+            objects[2].center.z = (t + 3.14).cos() * 0.3;
 
             window.request_redraw();
         }
