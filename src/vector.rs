@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-use std::ops::Mul;
+use std::ops::{Add, Mul, Sub};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vector {
@@ -29,6 +29,35 @@ impl Vector {
 
     pub fn dot(self, other: Self) -> float {
         self.x * other.x + self.y * other.y + self.z * other.z
+    }
+
+    /// https://math.stackexchange.com/a/13266/300156
+    pub fn reflect(self, normal: Self) -> Self {
+        self - normal * (2.0 * self.dot(normal) / self.len2())
+    }
+}
+
+impl Add for Vector {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        Self {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+            z: self.z + rhs.z,
+        }
+    }
+}
+
+impl Sub for Vector {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self {
+        Self {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+            z: self.z - rhs.z,
+        }
     }
 }
 

@@ -44,7 +44,7 @@ fn raytrace_first_hit(direction: Vector, objects: &[object::Sphere]) -> Option<(
         if t_a <= 0.0 && t_b <= 0.0 {
             continue;
         }
-        
+
         let dist = t_a.min(t_b);
         if let Some((distance, _)) = closest {
             if distance > dist {
@@ -60,15 +60,23 @@ fn raytrace_first_hit(direction: Vector, objects: &[object::Sphere]) -> Option<(
 
 fn raytrace(direction: Vector, objects: &[object::Sphere]) -> [u8; 4] {
     if let Some((distance, i)) = raytrace_first_hit(direction, objects) {
-        let c = (0xff as float * (1.2-distance).powf(1.1)).clamp(0.0, 255.0) as u8;
+        let mut c = 0xff as float * (1.2 - distance).powf(1.1);
 
+        let hit_point = direction * distance;
+        let normal = hit_point - objects[i].center;
+        let reflection = direction.reflect(normal);
+
+        if reflection.normalized().y > 0.0 {
+            c *= (1.0 + reflection.normalized().y).powf(5.0);
+        }
+
+        let c = c.clamp(0.0, 255.0) as u8;
         return match i {
             0 => [c, 0x00, 0x00, 0xff],
             1 => [0x00, c, 0x00, 0xff],
             2 => [0x00, 0x00, c, 0xff],
             _ => [c, c, c, 0xff],
         };
-
     } else {
         [0x00, 0x00, 0x00, 0xff]
     }
@@ -176,7 +184,6 @@ fn main() -> Result<(), Error> {
             if let Some(size) = input.window_resized() {
                 pixels.resize(size.width, size.height);
             }
-
 
             // update
             let t = (time_start.elapsed().as_micros() as float) / 1_000_000.0;
