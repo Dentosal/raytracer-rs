@@ -18,6 +18,10 @@ impl Vector {
         self.dot(self)
     }
 
+    pub fn is_normalized(self) -> bool {
+        approx_eq(self.len2(), 1.0)
+    }
+
     pub fn normalized(self) -> Self {
         let len = self.len();
         Self {

@@ -1,11 +1,14 @@
 pub mod prelude;
 
 mod angle;
+mod matrix;
 mod object;
 mod vector;
 
 use std::time::Instant;
 
+pub use crate::angle::Angle;
+pub use crate::matrix::Matrix;
 pub use crate::vector::{Point, Vector};
 
 use pixels::{Error, Pixels, SurfaceTexture};
@@ -19,19 +22,24 @@ use winit_input_helper::WinitInputHelper;
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 480;
 
-fn raytrace_first_hit(direction: Vector, objects: &[object::Sphere]) -> Option<(f32, usize)> {
+fn raytrace_first_hit(
+    from: Point,
+    direction: Vector,
+    objects: &[object::Sphere],
+) -> Option<(f32, usize)> {
     // debug_assert!(direction.is_nonzero());
 
     let mut closest = None;
 
     for (i, sphere) in objects.iter().enumerate() {
-        // (vx * t - px)**2 + (vy * t - py)**2 + (vz * t - pz)**2 = r**2
+        // Center of the sphere, shifted as if the ray was short from the origo
+        let center = sphere.center - from;
 
-        let dot_prod = sphere.center.dot(direction);
+        let dot_prod = center.dot(direction);
 
         let a = direction.len2();
         let b = 2.0 * dot_prod;
-        let c = sphere.center.len2() - sphere.radius.powi(2);
+        let c = center.len2() - sphere.radius.powi(2);
         let d = b * b - 4.0 * a * c;
 
         if d <= 0.0 {
@@ -58,9 +66,10 @@ fn raytrace_first_hit(direction: Vector, objects: &[object::Sphere]) -> Option<(
     closest
 }
 
-fn raytrace(direction: Vector, objects: &[object::Sphere]) -> [u8; 4] {
-    if let Some((distance, i)) = raytrace_first_hit(direction, objects) {
-        let mut c = 0xff as float * (1.2 - distance).powf(1.1);
+fn raytrace(from: Point, direction: Vector, objects: &[object::Sphere]) -> [u8; 4] {
+    if let Some((distance, i)) = raytrace_first_hit(from, direction, objects) {
+        // let mut c = 0xff as float * (1.2 - distance).powf(1.1);
+        let mut c = 0x80 as float;
 
         let hit_point = direction * distance;
         let normal = hit_point - objects[i].center;
@@ -101,6 +110,21 @@ fn main() -> Result<(), Error> {
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
+
+    let mut camera = Matrix::translation(
+        Vector {
+            x: 0.0,
+            y: 0.0,
+            z: 0.5,
+        },
+    ) * Matrix::rotation(
+        Vector {
+            x: 1.0,
+            y: 0.0,
+            z: 0.0,
+        },
+        Angle { radians: 2.0 },
+    );
 
     let mut objects = vec![
         object::Sphere {
@@ -148,11 +172,12 @@ fn main() -> Result<(), Error> {
                 let pz = pz / len;
 
                 let color = raytrace(
-                    Vector {
-                        x: px,
-                        y: py,
-                        z: pz,
-                    },
+                    camera.pos(),
+                    camera.mul_rotate(Vector {
+                            x: px,
+                            y: py,
+                            z: pz,
+                        }),
                     &objects,
                 );
 
@@ -170,15 +195,49 @@ fn main() -> Result<(), Error> {
                 return;
             }
 
-            if input.key_pressed(VirtualKeyCode::Key1) || input.quit() {
+            if input.key_pressed(VirtualKeyCode::Key1) {
                 objects[0].center.x += 0.01;
                 println!("{}", objects[0].center.x);
             }
 
-            if input.key_pressed(VirtualKeyCode::Key2) || input.quit() {
+            if input.key_pressed(VirtualKeyCode::Key2) {
                 objects[0].center.x -= 0.01;
                 println!("{}", objects[0].center.x);
             }
+
+            if input.key_pressed(VirtualKeyCode::W) {
+                camera = camera * Matrix::translation(Vector {
+                    x: 0.1,
+                    y: 0.0,
+                    z: 0.0,
+                });
+            }
+
+            if input.key_pressed(VirtualKeyCode::S) {
+                camera = camera * Matrix::translation(Vector {
+                    x: -0.1,
+                    y: 0.0,
+                    z: 0.0,
+                });
+            }
+
+            if input.key_pressed(VirtualKeyCode::A) {
+                camera = camera * Matrix::rotation(Vector {
+                    x: 0.0,
+                    y: 1.0,
+                    z: 0.0,
+                }, Angle {radians: -0.01});
+            }
+
+
+            if input.key_pressed(VirtualKeyCode::D) {
+                camera = camera * Matrix::rotation(Vector {
+                    x: 0.0,
+                    y: 1.0,
+                    z: 0.0,
+                }, Angle {radians: 0.01});
+            }
+
 
             // Resize the window
             if let Some(size) = input.window_resized() {
