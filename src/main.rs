@@ -1,18 +1,21 @@
 pub mod prelude;
 
 mod angle;
+mod color;
 mod matrix;
 mod object;
 mod vector;
 
-use std::time::Instant;
-
 pub use crate::angle::Angle;
+pub use crate::color::Color;
 pub use crate::matrix::Matrix;
 pub use crate::vector::{Point, Vector};
 
+use crate::prelude::float;
+
+use std::time::Instant;
+
 use pixels::{Error, Pixels, SurfaceTexture};
-use prelude::float;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -21,6 +24,8 @@ use winit_input_helper::WinitInputHelper;
 
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 480;
+
+const BOUNCES: usize = 5;
 
 fn raytrace_first_hit(
     from: Point,
@@ -69,59 +74,83 @@ fn raytrace_first_hit(
     closest
 }
 
-fn raytrace(from: Point, direction: Vector, objects: &[object::Sphere]) -> [u8; 4] {
-    let direction = direction.normalized();
+fn raytrace(
+    mut from: Point,
+    mut direction: Vector,
+    objects: &[object::Sphere],
+    sun: Vector,
+) -> Color {
+    direction = direction.normalized();
 
-    if let Some((distance, i)) = raytrace_first_hit(from, direction, objects) {
-        let hit_point: Point = from + direction * distance;
-        let normal = (hit_point - objects[i].center).normalized();
+    let mut any_hits = false;
+    let mut mask_color = Color::WHITE; // Surfaces only reflect their own color
+    let mut acc_color = Color::BLACK; // Total color
 
-        if objects[i].emits_light {
-            let w = (-direction).dot(normal);
-            return [
-                (objects[i].color[0] as float * w) as u8,
-                (objects[i].color[1] as float * w) as u8,
-                (objects[i].color[2] as float * w) as u8,
-                0xff,
-            ];
-        }
+    for b in 0..=BOUNCES {
+        if let Some((distance, i)) = raytrace_first_hit(from, direction, objects) {
+            any_hits = true;
 
-        let reflection = direction.reflect(normal);
+            let hit_point: Point = from + direction * distance;
+            let normal = (hit_point - objects[i].center).normalized();
 
-        // Epsilon hack to avoid self-collision
-        // let new_ray_source = reflection + normal * 1.0001;
-
-        let c0 = objects[i].color;
-
-        if let Some((dd, ii)) = raytrace_first_hit(hit_point, reflection, objects) {
-            assert_ne!(i, ii);
-
-            let c1 = objects[ii].color;
-
-            let hp: Point = hit_point + reflection * dd;
-            let nn = (hp - objects[ii].center).normalized();
+            if objects[i].emits_light {
+                let w = (-direction).dot(normal);
+                assert!(w >= 0.0);
+                acc_color = acc_color + (objects[i].color * mask_color).darken(w);
+            }
 
             let w = (-direction).dot(normal);
-            let q = (-reflection).dot(nn);
+            mask_color = mask_color * (objects[i].color).darken(w);
 
-            [
-                ((c0[0] as float * w) as u8 + (c1[0] as float * q) as u8),
-                ((c0[1] as float * w) as u8 + (c1[1] as float * q) as u8),
-                ((c0[2] as float * w) as u8 + (c1[2] as float * q) as u8),
-                0xff
-            ]
+            let reflection = direction.reflect(normal);
+
+            // Epsilon hack to avoid self-collision
+            // let new_ray_source = reflection + normal * 1.0001;
+
+            from = hit_point;
+            direction = reflection;
+
+            // println!("b = {} rc = {:?}", b, result_color);
+
+            // let c0 = objects[i].color;
+
+            // if let Some((dd, ii)) = raytrace_first_hit(hit_point, reflection, objects) {
+            //     assert_ne!(i, ii);
+
+            //     let c1 = objects[ii].color;
+
+            //     let hp: Point = hit_point + reflection * dd;
+            //     let nn = (hp - objects[ii].center).normalized();
+
+            //     let q = (-reflection).dot(nn);
+
+            //     [
+            //         ((c0[0] as float * w) as u8 + (c1[0] as float * q) as u8),
+            //         ((c0[1] as float * w) as u8 + (c1[1] as float * q) as u8),
+            //         ((c0[2] as float * w) as u8 + (c1[2] as float * q) as u8),
+            //         0xff,
+            //     ]
+            // } else {
+            // let w = (-direction).dot(normal);
+            // [
+            //     (c0[0] as float * w) as u8,
+            //     (c0[1] as float * w) as u8,
+            //     (c0[2] as float * w) as u8,
+            //     0xff
+            // ]
+            // }
         } else {
-            let w = (-direction).dot(normal);
-            [
-                (c0[0] as float * w) as u8,
-                (c0[1] as float * w) as u8,
-                (c0[2] as float * w) as u8,
-                0xff
-            ]
+            // No hit, check for sun
+            let s = (-sun).dot(direction);
+            if s > 0.0 && any_hits {
+                acc_color = acc_color + (Color::WHITE * mask_color).darken(s);
+            }
+
+            break;
         }
-    } else {
-        [0x00, 0x00, 0x00, 0xff]
     }
+
+    acc_color
 }
 
 fn main() -> Result<(), Error> {
@@ -157,6 +186,13 @@ fn main() -> Result<(), Error> {
         Angle { radians: 0.0 },
     );
 
+    let sun = (Vector {
+        x: 0.1,
+        y: -1.0,
+        z: 0.2,
+    })
+    .normalized();
+
     let mut objects = vec![
         object::Sphere {
             center: Point {
@@ -165,7 +201,11 @@ fn main() -> Result<(), Error> {
                 z: 0.0,
             },
             radius: 0.2,
-            color: [0xff, 0x00, 0x00],
+            color: Color {
+                r: 1.0,
+                g: 0.2,
+                b: 0.2,
+            },
             emits_light: false,
         },
         object::Sphere {
@@ -175,7 +215,7 @@ fn main() -> Result<(), Error> {
                 z: 0.0,
             },
             radius: 0.12,
-            color: [0x00, 0xff, 0x00],
+            color: Color::GREEN,
             emits_light: true,
         },
         object::Sphere {
@@ -185,8 +225,8 @@ fn main() -> Result<(), Error> {
                 z: 0.0,
             },
             radius: 0.12,
-            color: [0x00, 0x00, 0xff],
-            emits_light: false,
+            color: Color::WHITE,
+            emits_light: true,
         },
         // object::Sphere {
         //     center: Point {
@@ -240,15 +280,13 @@ fn main() -> Result<(), Error> {
                     z: (cx - x as f32) / (WIDTH as f32) * aspect_ratio,
                     y: (cy - y as f32) / (HEIGHT as f32),
                     x: 1.0f32, // affects fov calculation
-                }).normalized();
+                })
+                .normalized();
 
-                let color = raytrace(
-                    camera.pos(),
-                    camera.mul_rotate(p),
-                    &objects,
-                );
+                let color = raytrace(camera.pos(), camera.mul_rotate(p), &objects, sun);
+                let c = color.to_pixel_color();
 
-                pixel.copy_from_slice(&color);
+                pixel.copy_from_slice(&c);
             }
 
             pixels.render().unwrap();
