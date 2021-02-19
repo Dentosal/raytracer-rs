@@ -24,6 +24,7 @@ impl Vector {
 
     pub fn normalized(self) -> Self {
         let len = self.len();
+        assert!(len > 0.0001);
         Self {
             x: self.x / len,
             y: self.y / len,
