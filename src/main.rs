@@ -13,6 +13,7 @@ pub use crate::vector::{Point, Vector};
 
 use crate::prelude::float;
 
+use rayon::prelude::*;
 use std::time::Instant;
 
 use pixels::{Error, Pixels, SurfaceTexture};
@@ -86,7 +87,7 @@ fn raytrace(
     let mut mask_color = Color::WHITE; // Surfaces only reflect their own color
     let mut acc_color = Color::BLACK; // Total color
 
-    for b in 0..=BOUNCES {
+    for _ in 0..=BOUNCES {
         if let Some((distance, i)) = raytrace_first_hit(from, direction, objects) {
             any_hits = true;
 
@@ -267,27 +268,30 @@ fn main() -> Result<(), Error> {
 
             let frame = pixels.get_frame();
 
-            for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-                let x = (i % WIDTH as usize) as u16;
-                let y = (i / WIDTH as usize) as u16;
+            frame
+                .par_chunks_exact_mut(4)
+                .enumerate()
+                .for_each(|(i, pixel)| {
+                    let x = (i % WIDTH as usize) as u16;
+                    let y = (i / WIDTH as usize) as u16;
 
-                let aspect_ratio = (WIDTH as f32) / (HEIGHT as f32);
+                    let aspect_ratio = (WIDTH as f32) / (HEIGHT as f32);
 
-                let cx = 0.5 * (WIDTH as f32);
-                let cy = 0.5 * (HEIGHT as f32);
+                    let cx = 0.5 * (WIDTH as f32);
+                    let cy = 0.5 * (HEIGHT as f32);
 
-                let p = (Vector {
-                    z: (cx - x as f32) / (WIDTH as f32) * aspect_ratio,
-                    y: (cy - y as f32) / (HEIGHT as f32),
-                    x: 1.0f32, // affects fov calculation
-                })
-                .normalized();
+                    let p = (Vector {
+                        z: (cx - x as f32) / (WIDTH as f32) * aspect_ratio,
+                        y: (cy - y as f32) / (HEIGHT as f32),
+                        x: 1.0f32, // affects fov calculation
+                    })
+                    .normalized();
 
-                let color = raytrace(camera.pos(), camera.mul_rotate(p), &objects, sun);
-                let c = color.to_pixel_color();
+                    let color = raytrace(camera.pos(), camera.mul_rotate(p), &objects, sun);
+                    let c = color.to_pixel_color();
 
-                pixel.copy_from_slice(&c);
-            }
+                    pixel.copy_from_slice(&c);
+                });
 
             pixels.render().unwrap();
         }
