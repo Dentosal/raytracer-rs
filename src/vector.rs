@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-use std::ops::{Add, Mul, Sub};
+use std::ops::{Add, Mul, Sub, Neg};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vector {
@@ -38,6 +38,18 @@ impl Vector {
     /// https://math.stackexchange.com/a/13266/300156
     pub fn reflect(self, normal: Self) -> Self {
         self - normal * (2.0 * self.dot(normal) / self.len2())
+    }
+}
+
+impl Neg for Vector {
+    type Output = Self;
+
+    fn neg(self) -> Self {
+        Self {
+            x: -self.x,
+            y: -self.y,
+            z: -self.z,
+        }
     }
 }
 
