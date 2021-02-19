@@ -33,8 +33,6 @@ fn raytrace_first_hit(
     direction: Vector,
     objects: &[object::Sphere],
 ) -> Option<(f32, usize)> {
-    // debug_assert!(direction.is_nonzero());
-
     let direction = direction.normalized();
 
     let mut closest = None;
@@ -42,11 +40,6 @@ fn raytrace_first_hit(
     for (i, sphere) in objects.iter().enumerate() {
         // Center of the sphere, shifted as if the ray was short from the origo
         let center = sphere.center - from;
-
-        // if center.len() < sphere.radius * 1.0000001 {
-        //     println!("Inside sphere {}", i);
-        //     continue;
-        // }
 
         let c = center.len2() - sphere.radius.powi(2);
         let d = direction.dot(center).powi(2) - c;
@@ -57,12 +50,12 @@ fn raytrace_first_hit(
 
         let t_a = 0.5 * d.sqrt() + center.dot(direction);
         let t_b = -0.5 * d.sqrt() + center.dot(direction);
+        let dist = t_a.min(t_b);
 
-        if t_a <= 0.0 || t_b <= 0.0 {
+        if dist <= 0.0 {
             continue;
         }
 
-        let dist = t_a.min(t_b);
         if let Some((distance, _)) = closest {
             if distance > dist {
                 closest = Some((dist, i));
@@ -106,40 +99,8 @@ fn raytrace(
             let reflection = direction.reflect(normal);
 
             // Epsilon hack to avoid self-collision
-            // let new_ray_source = reflection + normal * 1.0001;
-
+            direction = (reflection + normal * 1.0001).normalized();
             from = hit_point;
-            direction = reflection;
-
-            // println!("b = {} rc = {:?}", b, result_color);
-
-            // let c0 = objects[i].color;
-
-            // if let Some((dd, ii)) = raytrace_first_hit(hit_point, reflection, objects) {
-            //     assert_ne!(i, ii);
-
-            //     let c1 = objects[ii].color;
-
-            //     let hp: Point = hit_point + reflection * dd;
-            //     let nn = (hp - objects[ii].center).normalized();
-
-            //     let q = (-reflection).dot(nn);
-
-            //     [
-            //         ((c0[0] as float * w) as u8 + (c1[0] as float * q) as u8),
-            //         ((c0[1] as float * w) as u8 + (c1[1] as float * q) as u8),
-            //         ((c0[2] as float * w) as u8 + (c1[2] as float * q) as u8),
-            //         0xff,
-            //     ]
-            // } else {
-            // let w = (-direction).dot(normal);
-            // [
-            //     (c0[0] as float * w) as u8,
-            //     (c0[1] as float * w) as u8,
-            //     (c0[2] as float * w) as u8,
-            //     0xff
-            // ]
-            // }
         } else {
             // No hit, check for sun
             let s = (-sun).dot(direction);
@@ -211,54 +172,24 @@ fn main() -> Result<(), Error> {
         },
         object::Sphere {
             center: Point {
-                x: 1.0,
-                y: -0.2,
+                x: 2.0,
+                y: 0.0,
                 z: 0.0,
             },
-            radius: 0.12,
+            radius: 0.08,
             color: Color::GREEN,
             emits_light: true,
         },
         object::Sphere {
             center: Point {
-                x: 1.0,
-                y: -0.2,
+                x: 3.0,
+                y: 0.0,
                 z: 0.0,
             },
-            radius: 0.12,
+            radius: 0.08,
             color: Color::WHITE,
             emits_light: true,
         },
-        // object::Sphere {
-        //     center: Point {
-        //         x: 1.0,
-        //         y: -0.2,
-        //         z: 0.0,
-        //     },
-        //     radius: 0.10,
-        //     color: [0xff, 0x00, 0x00],
-        //     emits_light: true,
-        // },
-        // object::Sphere {
-        //     center: Point {
-        //         x: 0.0,
-        //         y: 100.0,
-        //         z: 50.0,
-        //     },
-        //     radius: 1.0,
-        //     color: [0xff, 0xff, 0xff],
-        //     emits_light: true,
-        // },
-        // object::Sphere {
-        //     center: Point {
-        //         x: 0.0,
-        //         y: 1.0,
-        //         z: 0.0,
-        //     },
-        //     radius: 0.2,
-        //     color: [0xff, 0xff, 0xff],
-        //     emits_light: true,
-        // },
     ];
 
     event_loop.run(move |event, _, control_flow| {
@@ -363,11 +294,7 @@ fn main() -> Result<(), Error> {
 
             // update
             let t = (time_start.elapsed().as_micros() as float) / 1_000_000.0;
-
-            // objects[1].center.x = 1.0;
-            // objects[1].center.y = 0.0;
-            // objects[1].center.z = t.cos() * 0.3;
-
+ 
             objects[1].center.x = 1.0 + t.sin() * 0.3;
             objects[1].center.y = 0.0;
             objects[1].center.z = t.cos() * 0.3;
@@ -376,9 +303,6 @@ fn main() -> Result<(), Error> {
             objects[2].center.y = (t + 3.14).cos() * 0.3;
             objects[2].center.z = 0.0;
 
-            // objects[3].center.x = t.sin() * 3.0;
-            // objects[3].center.y = 0.0;
-            // objects[3].center.z = t.cos() * 3.0;
 
             window.request_redraw();
         }
