@@ -11,6 +11,7 @@ pub use crate::color::Color;
 pub use crate::matrix::Matrix;
 pub use crate::vector::{Point, Vector};
 
+use crate::object::{Material, Object, Shape};
 use crate::prelude::float;
 
 use rayon::prelude::*;
@@ -28,40 +29,62 @@ const HEIGHT: u32 = 480;
 
 const BOUNCES: usize = 5;
 
+#[derive(Debug, Clone, Copy)]
+struct RayHit {
+    /// Index
+    object: usize,
+    distance: float,
+    normal: Vector,
+}
+
 fn raytrace_first_hit(
     from: Point,
     direction: Vector,
-    objects: &[object::Sphere],
-) -> Option<(f32, usize)> {
+    objects: &[object::Object],
+) -> Option<RayHit> {
     let direction = direction.normalized();
 
-    let mut closest = None;
+    let mut closest: Option<RayHit> = None;
 
-    for (i, sphere) in objects.iter().enumerate() {
-        // Center of the sphere, shifted as if the ray was short from the origo
-        let center = sphere.center - from;
+    for (i, object) in objects.iter().enumerate() {
+        match object.shape {
+            Shape::Sphere { center, radius } => {
+                // Center of the sphere, shifted as if the ray was short from the origo
+                let relative = center - from;
 
-        let c = center.len2() - sphere.radius.powi(2);
-        let d = direction.dot(center).powi(2) - c;
+                let c = relative.len2() - radius.powi(2);
+                let d = direction.dot(relative).powi(2) - c;
 
-        if d <= 0.0 {
-            continue;
-        }
+                if d <= 0.0 {
+                    continue;
+                }
 
-        let t_a = 0.5 * d.sqrt() + center.dot(direction);
-        let t_b = -0.5 * d.sqrt() + center.dot(direction);
-        let dist = t_a.min(t_b);
+                let t_a = 0.5 * d.sqrt() + relative.dot(direction);
+                let t_b = -0.5 * d.sqrt() + relative.dot(direction);
+                let distance = t_a.min(t_b);
 
-        if dist <= 0.0 {
-            continue;
-        }
+                if distance <= 0.0 {
+                    continue;
+                }
 
-        if let Some((distance, _)) = closest {
-            if distance > dist {
-                closest = Some((dist, i));
+                let hit_point: Point = from + direction * distance;
+                let normal = (hit_point - center).normalized();
+
+                let hit = RayHit {
+                    object: i,
+                    distance,
+                    normal,
+                };
+
+                if let Some(old) = closest {
+                    if old.distance > distance {
+                        closest = Some(hit);
+                    }
+                } else {
+                    closest = Some(hit);
+                }
             }
-        } else {
-            closest = Some((dist, i));
+            Shape::Triangle { corners: _ } => todo!(),
         }
     }
 
@@ -71,7 +94,7 @@ fn raytrace_first_hit(
 fn raytrace(
     mut from: Point,
     mut direction: Vector,
-    objects: &[object::Sphere],
+    objects: &[object::Object],
     sun: Vector,
 ) -> Color {
     direction = direction.normalized();
@@ -81,25 +104,25 @@ fn raytrace(
     let mut acc_color = Color::BLACK; // Total color
 
     for _ in 0..=BOUNCES {
-        if let Some((distance, i)) = raytrace_first_hit(from, direction, objects) {
+        if let Some(hit) = raytrace_first_hit(from, direction, objects) {
             any_hits = true;
 
-            let hit_point: Point = from + direction * distance;
-            let normal = (hit_point - objects[i].center).normalized();
+            let hit_point: Point = from + direction * hit.distance;
+            let material = objects[hit.object].material.clone();
 
-            if objects[i].emits_light {
-                let w = (-direction).dot(normal);
+            if material.emits_light {
+                let w = (-direction).dot(hit.normal);
                 assert!(w >= 0.0);
-                acc_color = acc_color + (objects[i].color * mask_color).darken(w);
+                acc_color = acc_color + (material.color * mask_color).darken(w);
             }
 
-            let w = (-direction).dot(normal);
-            mask_color = mask_color * (objects[i].color).darken(w);
+            let w = (-direction).dot(hit.normal);
+            mask_color = mask_color * material.color.darken(w);
 
-            let reflection = direction.reflect(normal);
+            let reflection = direction.reflect(hit.normal);
 
             // Epsilon hack to avoid self-collision
-            direction = (reflection + normal * 1.0001).normalized();
+            direction = (reflection + hit.normal * 1.0001).normalized();
             from = hit_point;
         } else {
             // No hit, check for sun
@@ -156,39 +179,51 @@ fn main() -> Result<(), Error> {
     .normalized();
 
     let mut objects = vec![
-        object::Sphere {
-            center: Point {
-                x: 1.0,
-                y: 0.0,
-                z: 0.0,
+        Object {
+            shape: Shape::Sphere {
+                center: Point {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                radius: 0.2,
             },
-            radius: 0.2,
-            color: Color {
-                r: 1.0,
-                g: 0.2,
-                b: 0.2,
+            material: Material {
+                color: Color {
+                    r: 1.0,
+                    g: 0.2,
+                    b: 0.2,
+                },
+                emits_light: false,
             },
-            emits_light: false,
         },
-        object::Sphere {
-            center: Point {
-                x: 2.0,
-                y: 0.0,
-                z: 0.0,
+        Object {
+            shape: Shape::Sphere {
+                center: Point {
+                    x: 2.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                radius: 0.08,
             },
-            radius: 0.08,
-            color: Color::GREEN,
-            emits_light: true,
+            material: Material {
+                color: Color::GREEN,
+                emits_light: true,
+            },
         },
-        object::Sphere {
-            center: Point {
-                x: 3.0,
-                y: 0.0,
-                z: 0.0,
+        Object {
+            shape: Shape::Sphere {
+                center: Point {
+                    x: 3.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                radius: 0.08,
             },
-            radius: 0.08,
-            color: Color::WHITE,
-            emits_light: true,
+            material: Material {
+                color: Color::WHITE,
+                emits_light: true,
+            },
         },
     ];
 
@@ -233,16 +268,6 @@ fn main() -> Result<(), Error> {
             if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
                 *control_flow = ControlFlow::Exit;
                 return;
-            }
-
-            if input.key_pressed(VirtualKeyCode::Key1) {
-                objects[0].center.x += 0.01;
-                println!("{}", objects[0].center.x);
-            }
-
-            if input.key_pressed(VirtualKeyCode::Key2) {
-                objects[0].center.x -= 0.01;
-                println!("{}", objects[0].center.x);
             }
 
             if input.key_pressed(VirtualKeyCode::W) {
@@ -294,15 +319,22 @@ fn main() -> Result<(), Error> {
 
             // update
             let t = (time_start.elapsed().as_micros() as float) / 1_000_000.0;
- 
-            objects[1].center.x = 1.0 + t.sin() * 0.3;
-            objects[1].center.y = 0.0;
-            objects[1].center.z = t.cos() * 0.3;
 
-            objects[2].center.x = 1.0 + (t + 3.14).sin() * 0.3;
-            objects[2].center.y = (t + 3.14).cos() * 0.3;
-            objects[2].center.z = 0.0;
+            if let Shape::Sphere { center, .. } = &mut objects[1].shape {
+                *center = Vector {
+                    x: 1.0 + t.sin() * 0.3,
+                    y: 0.0,
+                    z: t.cos() * 0.3,
+                };
+            }
 
+            if let Shape::Sphere { center, .. } = &mut objects[2].shape {
+                *center = Vector {
+                    x: 1.0 + (t + 3.14).sin() * 0.3,
+                    y: (t + 3.14).cos() * 0.3,
+                    z: 0.0,
+                };
+            }
 
             window.request_redraw();
         }
