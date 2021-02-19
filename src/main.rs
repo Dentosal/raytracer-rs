@@ -29,27 +29,30 @@ fn raytrace_first_hit(
 ) -> Option<(f32, usize)> {
     // debug_assert!(direction.is_nonzero());
 
+    let direction = direction.normalized();
+
     let mut closest = None;
 
     for (i, sphere) in objects.iter().enumerate() {
         // Center of the sphere, shifted as if the ray was short from the origo
         let center = sphere.center - from;
 
-        let dot_prod = center.dot(direction);
+        if center.len() < sphere.radius * 1.01 {
+            println!("Inside sphere {}", i);
+            continue;
+        }
 
-        let a = direction.len2();
-        let b = 2.0 * dot_prod;
         let c = center.len2() - sphere.radius.powi(2);
-        let d = b * b - 4.0 * a * c;
+        let d = direction.dot(center).powi(2) - c;
 
         if d <= 0.0 {
             continue;
         }
 
-        let t_a = 0.5 * d.sqrt() + dot_prod;
-        let t_b = -0.5 * d.sqrt() + dot_prod;
+        let t_a = 0.5 * d.sqrt() + center.dot(direction);
+        let t_b = -0.5 * d.sqrt() + center.dot(direction);
 
-        if t_a <= 0.0 && t_b <= 0.0 {
+        if t_a <= 0.0 || t_b <= 0.0 {
             continue;
         }
 
@@ -67,25 +70,36 @@ fn raytrace_first_hit(
 }
 
 fn raytrace(from: Point, direction: Vector, objects: &[object::Sphere]) -> [u8; 4] {
+    let direction = direction.normalized();
+
     if let Some((distance, i)) = raytrace_first_hit(from, direction, objects) {
-        // let mut c = 0xff as float * (1.2 - distance).powf(1.1);
-        let mut c = 0x80 as float;
+        // if objects[i].emits_light {
+        //     return [
+        //         objects[i].color[0],
+        //         objects[i].color[1],
+        //         objects[i].color[2],
+        //         0xff,
+        //     ];
+        // }
 
-        let hit_point = direction * distance;
+        let hit_point: Point = from + direction * distance;
         let normal = hit_point - objects[i].center;
-        let reflection = direction.reflect(normal);
 
-        if reflection.normalized().y > 0.0 {
-            c *= (1.0 + reflection.normalized().y).powf(5.0);
-        }
+        // let reflection = direction.reflect(normal);
 
-        let c = c.clamp(0.0, 255.0) as u8;
-        return match i {
-            0 => [c, 0x00, 0x00, 0xff],
-            1 => [0x00, c, 0x00, 0xff],
-            2 => [0x00, 0x00, c, 0xff],
-            _ => [c, c, c, 0xff],
-        };
+        // Epsilon hack to avoid self-collision
+        // let new_ray_source = reflection + normal.normalized() * 0.0001;
+
+        // let c0 = objects[i].color;
+        // let c1 = raytrace(new_ray_source, reflection, objects);
+
+        let q = (-direction).normalized().dot(normal.normalized());
+        return [0x00, 0x00, (0xff as float * q) as u8, 0xff];
+
+        // if c1 == [0x00, 0x00, 0x00, 0xff] {
+        // }
+
+        // [c1[0], c1[1], c1[2], 0xff]
     } else {
         [0x00, 0x00, 0x00, 0xff]
     }
@@ -111,19 +125,17 @@ fn main() -> Result<(), Error> {
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
 
-    let mut camera = Matrix::translation(
-        Vector {
-            x: 0.0,
-            y: 0.0,
-            z: 0.5,
-        },
-    ) * Matrix::rotation(
+    let mut camera = Matrix::translation(Vector {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    }) * Matrix::rotation(
         Vector {
             x: 1.0,
             y: 0.0,
             z: 0.0,
         },
-        Angle { radians: 2.0 },
+        Angle { radians: 0.0 },
     );
 
     let mut objects = vec![
@@ -174,10 +186,10 @@ fn main() -> Result<(), Error> {
                 let color = raytrace(
                     camera.pos(),
                     camera.mul_rotate(Vector {
-                            x: px,
-                            y: py,
-                            z: pz,
-                        }),
+                        x: px,
+                        y: py,
+                        z: pz,
+                    }),
                     &objects,
                 );
 
@@ -206,38 +218,46 @@ fn main() -> Result<(), Error> {
             }
 
             if input.key_pressed(VirtualKeyCode::W) {
-                camera = camera * Matrix::translation(Vector {
-                    x: 0.1,
-                    y: 0.0,
-                    z: 0.0,
-                });
+                camera = camera
+                    * Matrix::translation(Vector {
+                        x: 0.1,
+                        y: 0.0,
+                        z: 0.0,
+                    });
             }
 
             if input.key_pressed(VirtualKeyCode::S) {
-                camera = camera * Matrix::translation(Vector {
-                    x: -0.1,
-                    y: 0.0,
-                    z: 0.0,
-                });
+                camera = camera
+                    * Matrix::translation(Vector {
+                        x: -0.1,
+                        y: 0.0,
+                        z: 0.0,
+                    });
             }
 
             if input.key_pressed(VirtualKeyCode::A) {
-                camera = camera * Matrix::rotation(Vector {
-                    x: 0.0,
-                    y: 1.0,
-                    z: 0.0,
-                }, Angle {radians: -0.01});
+                camera = camera
+                    * Matrix::rotation(
+                        Vector {
+                            x: 0.0,
+                            y: 1.0,
+                            z: 0.0,
+                        },
+                        Angle { radians: -0.1 },
+                    );
             }
-
 
             if input.key_pressed(VirtualKeyCode::D) {
-                camera = camera * Matrix::rotation(Vector {
-                    x: 0.0,
-                    y: 1.0,
-                    z: 0.0,
-                }, Angle {radians: 0.01});
+                camera = camera
+                    * Matrix::rotation(
+                        Vector {
+                            x: 0.0,
+                            y: 1.0,
+                            z: 0.0,
+                        },
+                        Angle { radians: 0.1 },
+                    );
             }
-
 
             // Resize the window
             if let Some(size) = input.window_resized() {
@@ -251,9 +271,13 @@ fn main() -> Result<(), Error> {
             objects[1].center.y = 0.0;
             objects[1].center.z = t.cos() * 0.3;
 
-            objects[2].center.x = 1.0 + (t + 3.14).sin() * 0.3;
-            objects[2].center.y = 0.0;
-            objects[2].center.z = (t + 3.14).cos() * 0.3;
+            // objects[2].center.x = 1.0 + (t + 3.14).sin() * 0.3;
+            // objects[2].center.y = 0.0;
+            // objects[2].center.z = (t + 3.14).cos() * 0.3;
+
+            // objects[3].center.x = t.sin() * 3.0;
+            // objects[3].center.y = 0.0;
+            // objects[3].center.z = t.cos() * 3.0;
 
             window.request_redraw();
         }
