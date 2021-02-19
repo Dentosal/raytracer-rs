@@ -37,10 +37,10 @@ fn raytrace_first_hit(
         // Center of the sphere, shifted as if the ray was short from the origo
         let center = sphere.center - from;
 
-        if center.len() < sphere.radius * 1.01 {
-            println!("Inside sphere {}", i);
-            continue;
-        }
+        // if center.len() < sphere.radius * 1.0000001 {
+        //     println!("Inside sphere {}", i);
+        //     continue;
+        // }
 
         let c = center.len2() - sphere.radius.powi(2);
         let d = direction.dot(center).powi(2) - c;
@@ -73,33 +73,52 @@ fn raytrace(from: Point, direction: Vector, objects: &[object::Sphere]) -> [u8; 
     let direction = direction.normalized();
 
     if let Some((distance, i)) = raytrace_first_hit(from, direction, objects) {
-        // if objects[i].emits_light {
-        //     return [
-        //         objects[i].color[0],
-        //         objects[i].color[1],
-        //         objects[i].color[2],
-        //         0xff,
-        //     ];
-        // }
-
         let hit_point: Point = from + direction * distance;
-        let normal = hit_point - objects[i].center;
+        let normal = (hit_point - objects[i].center).normalized();
 
-        // let reflection = direction.reflect(normal);
+        if objects[i].emits_light {
+            let w = (-direction).dot(normal);
+            return [
+                (objects[i].color[0] as float * w) as u8,
+                (objects[i].color[1] as float * w) as u8,
+                (objects[i].color[2] as float * w) as u8,
+                0xff,
+            ];
+        }
+
+        let reflection = direction.reflect(normal);
 
         // Epsilon hack to avoid self-collision
-        // let new_ray_source = reflection + normal.normalized() * 0.0001;
+        // let new_ray_source = reflection + normal * 1.0001;
 
-        // let c0 = objects[i].color;
-        // let c1 = raytrace(new_ray_source, reflection, objects);
+        let c0 = objects[i].color;
 
-        let q = (-direction).normalized().dot(normal.normalized());
-        return [0x00, 0x00, (0xff as float * q) as u8, 0xff];
+        if let Some((dd, ii)) = raytrace_first_hit(hit_point, reflection, objects) {
+            assert_ne!(i, ii);
 
-        // if c1 == [0x00, 0x00, 0x00, 0xff] {
-        // }
+            let c1 = objects[ii].color;
 
-        // [c1[0], c1[1], c1[2], 0xff]
+            let hp: Point = hit_point + reflection * dd;
+            let nn = (hp - objects[ii].center).normalized();
+
+            let w = (-direction).dot(normal);
+            let q = (-reflection).dot(nn);
+
+            [
+                ((c0[0] as float * w) as u8 + (c1[0] as float * q) as u8),
+                ((c0[1] as float * w) as u8 + (c1[1] as float * q) as u8),
+                ((c0[2] as float * w) as u8 + (c1[2] as float * q) as u8),
+                0xff
+            ]
+        } else {
+            let w = (-direction).dot(normal);
+            [
+                (c0[0] as float * w) as u8,
+                (c0[1] as float * w) as u8,
+                (c0[2] as float * w) as u8,
+                0xff
+            ]
+        }
     } else {
         [0x00, 0x00, 0x00, 0xff]
     }
@@ -146,6 +165,8 @@ fn main() -> Result<(), Error> {
                 z: 0.0,
             },
             radius: 0.2,
+            color: [0xff, 0x00, 0x00],
+            emits_light: false,
         },
         object::Sphere {
             center: Point {
@@ -154,7 +175,49 @@ fn main() -> Result<(), Error> {
                 z: 0.0,
             },
             radius: 0.12,
+            color: [0x00, 0xff, 0x00],
+            emits_light: true,
         },
+        object::Sphere {
+            center: Point {
+                x: 1.0,
+                y: -0.2,
+                z: 0.0,
+            },
+            radius: 0.12,
+            color: [0x00, 0x00, 0xff],
+            emits_light: false,
+        },
+        // object::Sphere {
+        //     center: Point {
+        //         x: 1.0,
+        //         y: -0.2,
+        //         z: 0.0,
+        //     },
+        //     radius: 0.10,
+        //     color: [0xff, 0x00, 0x00],
+        //     emits_light: true,
+        // },
+        // object::Sphere {
+        //     center: Point {
+        //         x: 0.0,
+        //         y: 100.0,
+        //         z: 50.0,
+        //     },
+        //     radius: 1.0,
+        //     color: [0xff, 0xff, 0xff],
+        //     emits_light: true,
+        // },
+        // object::Sphere {
+        //     center: Point {
+        //         x: 0.0,
+        //         y: 1.0,
+        //         z: 0.0,
+        //     },
+        //     radius: 0.2,
+        //     color: [0xff, 0xff, 0xff],
+        //     emits_light: true,
+        // },
     ];
 
     event_loop.run(move |event, _, control_flow| {
@@ -173,23 +236,15 @@ fn main() -> Result<(), Error> {
                 let cx = 0.5 * (WIDTH as f32);
                 let cy = 0.5 * (HEIGHT as f32);
 
-                let pz = (cx - x as f32) / (WIDTH as f32) * aspect_ratio;
-                let py = (cy - y as f32) / (HEIGHT as f32);
-                let px = 1.0f32; // affects fov calculation
-
-                let len = (px.powi(2) + py.powi(2) + pz.powi(2)).sqrt();
-
-                let px = px / len;
-                let py = py / len;
-                let pz = pz / len;
+                let p = (Vector {
+                    z: (cx - x as f32) / (WIDTH as f32) * aspect_ratio,
+                    y: (cy - y as f32) / (HEIGHT as f32),
+                    x: 1.0f32, // affects fov calculation
+                }).normalized();
 
                 let color = raytrace(
                     camera.pos(),
-                    camera.mul_rotate(Vector {
-                        x: px,
-                        y: py,
-                        z: pz,
-                    }),
+                    camera.mul_rotate(p),
                     &objects,
                 );
 
@@ -267,13 +322,17 @@ fn main() -> Result<(), Error> {
             // update
             let t = (time_start.elapsed().as_micros() as float) / 1_000_000.0;
 
+            // objects[1].center.x = 1.0;
+            // objects[1].center.y = 0.0;
+            // objects[1].center.z = t.cos() * 0.3;
+
             objects[1].center.x = 1.0 + t.sin() * 0.3;
             objects[1].center.y = 0.0;
             objects[1].center.z = t.cos() * 0.3;
 
-            // objects[2].center.x = 1.0 + (t + 3.14).sin() * 0.3;
-            // objects[2].center.y = 0.0;
-            // objects[2].center.z = (t + 3.14).cos() * 0.3;
+            objects[2].center.x = 1.0 + (t + 3.14).sin() * 0.3;
+            objects[2].center.y = (t + 3.14).cos() * 0.3;
+            objects[2].center.z = 0.0;
 
             // objects[3].center.x = t.sin() * 3.0;
             // objects[3].center.y = 0.0;
