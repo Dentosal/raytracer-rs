@@ -4,6 +4,7 @@ mod angle;
 mod color;
 mod matrix;
 mod object;
+mod raycast;
 mod vector;
 
 pub use crate::angle::Angle;
@@ -13,6 +14,7 @@ pub use crate::vector::{Point, Vector};
 
 use crate::object::{Material, Object, Shape};
 use crate::prelude::float;
+use crate::raycast::raycast;
 
 use rayon::prelude::*;
 use std::time::Instant;
@@ -29,68 +31,6 @@ const HEIGHT: u32 = 480;
 
 const BOUNCES: usize = 5;
 
-#[derive(Debug, Clone, Copy)]
-struct RayHit {
-    /// Index
-    object: usize,
-    distance: float,
-    normal: Vector,
-}
-
-fn raytrace_first_hit(
-    from: Point,
-    direction: Vector,
-    objects: &[object::Object],
-) -> Option<RayHit> {
-    let direction = direction.normalized();
-
-    let mut closest: Option<RayHit> = None;
-
-    for (i, object) in objects.iter().enumerate() {
-        match object.shape {
-            Shape::Sphere { center, radius } => {
-                // Center of the sphere, shifted as if the ray was short from the origo
-                let relative = center - from;
-
-                let c = relative.len2() - radius.powi(2);
-                let d = direction.dot(relative).powi(2) - c;
-
-                if d <= 0.0 {
-                    continue;
-                }
-
-                let t_a = 0.5 * d.sqrt() + relative.dot(direction);
-                let t_b = -0.5 * d.sqrt() + relative.dot(direction);
-                let distance = t_a.min(t_b);
-
-                if distance <= 0.0 {
-                    continue;
-                }
-
-                let hit_point: Point = from + direction * distance;
-                let normal = (hit_point - center).normalized();
-
-                let hit = RayHit {
-                    object: i,
-                    distance,
-                    normal,
-                };
-
-                if let Some(old) = closest {
-                    if old.distance > distance {
-                        closest = Some(hit);
-                    }
-                } else {
-                    closest = Some(hit);
-                }
-            }
-            Shape::Triangle { corners: _ } => todo!(),
-        }
-    }
-
-    closest
-}
-
 fn raytrace(
     mut from: Point,
     mut direction: Vector,
@@ -104,7 +44,7 @@ fn raytrace(
     let mut acc_color = Color::BLACK; // Total color
 
     for _ in 0..=BOUNCES {
-        if let Some(hit) = raytrace_first_hit(from, direction, objects) {
+        if let Some(hit) = raycast(from, direction, objects) {
             any_hits = true;
 
             let hit_point: Point = from + direction * hit.distance;
