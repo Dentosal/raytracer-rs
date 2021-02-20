@@ -66,7 +66,62 @@ fn ray_sphere(from: Point, direction: Vector, center: Point, radius: float) -> O
     })
 }
 
+
 /// Object is filled back later
 fn ray_triange(from: Point, direction: Vector, corners: [Point; 3]) -> Option<RayHit> {
-    todo!()
+    let edge1 = corners[1] - corners[0];
+    let edge2 = corners[2] - corners[0];
+
+    let normal = edge1.cross(edge2).normalized();
+
+    // Is parallel?
+    if normal.dot(direction).abs() < 0.000001 {
+        return None;
+    }
+
+    // Plane intersection point
+    let distance = (normal.dot(corners[0] - from)) / normal.dot(direction);
+
+    // Behind the ray?
+    if distance <= 0.0001 {
+        return None;
+    }
+
+    let hit_point = from + direction * distance;
+
+    // Inside-outside test for each edge
+
+    let edge = corners[1] - corners[0];
+    assert!(edge.len2() > 0.0001);
+    let vp = hit_point - corners[0];
+    if vp.len2() < 0.0001 {return None;}
+    if normal.dot(edge.cross(vp)) < 0.0 {
+        return None;
+    }
+
+    let edge = corners[2] - corners[1];
+    assert!(edge.len2() > 0.0001);
+    let vp = hit_point - corners[1];
+    if vp.len2() < 0.0001 {return None;}
+    if normal.dot(edge.cross(vp)) < 0.0 {
+        return None;
+    }
+
+    let edge = corners[0] - corners[2];
+    assert!(edge.len2() > 0.0001);
+    let vp = hit_point - corners[2];
+    if vp.len2() < 0.0001 {return None;}
+    if normal.dot(edge.cross(vp)) < 0.0 {
+        return None;
+    }
+
+    Some(RayHit {
+        object: 0,
+        distance,
+        normal: if normal.dot(direction) >= 0.0 {
+            -normal
+        } else {
+            normal
+        },
+    })
 }
