@@ -71,6 +71,9 @@ fn raytrace(
                 acc_color = acc_color + (Color::WHITE * mask_color).darken(s);
             }
 
+            // Skybox
+            acc_color = acc_color + (Color::WHITE * mask_color).darken(0.1);
+
             break;
         }
     }
