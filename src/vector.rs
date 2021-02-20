@@ -106,11 +106,10 @@ impl Mul<float> for Vector {
 
 pub type Point = Vector;
 
-
 #[cfg(test)]
 mod tests {
-    use crate::prelude::*;
     use super::Vector;
+    use crate::prelude::*;
 
     #[test]
     fn cross_product_simple_0() {
@@ -135,8 +134,16 @@ mod tests {
 
     #[test]
     fn cross_product_simple_1() {
-        let a = Vector { x: 0.0, y: 0.0, z: 0.5 };
-        let b = Vector { x: 0.0, y: 0.5, z: 0.0 };
+        let a = Vector {
+            x: 0.0,
+            y: 0.0,
+            z: 0.5,
+        };
+        let b = Vector {
+            x: 0.0,
+            y: 0.5,
+            z: 0.0,
+        };
 
         let c = a.cross(b).normalized();
         let d = b.cross(a).normalized();

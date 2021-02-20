@@ -66,11 +66,14 @@ fn ray_sphere(from: Point, direction: Vector, center: Point, radius: float) -> O
     })
 }
 
-
 /// Object is filled back later
 fn ray_triange(from: Point, direction: Vector, corners: [Point; 3]) -> Option<RayHit> {
     let edge1 = corners[1] - corners[0];
     let edge2 = corners[2] - corners[0];
+
+    if edge1.len2() < 0.00001 || edge2.len2() < 0.00001 {
+        return None;
+    }
 
     let normal = edge1.cross(edge2).normalized();
 
@@ -94,7 +97,9 @@ fn ray_triange(from: Point, direction: Vector, corners: [Point; 3]) -> Option<Ra
     let edge = corners[1] - corners[0];
     assert!(edge.len2() > 0.0001);
     let vp = hit_point - corners[0];
-    if vp.len2() < 0.0001 {return None;}
+    if vp.len2() < 0.0001 {
+        return None;
+    }
     if normal.dot(edge.cross(vp)) < 0.0 {
         return None;
     }
@@ -102,7 +107,9 @@ fn ray_triange(from: Point, direction: Vector, corners: [Point; 3]) -> Option<Ra
     let edge = corners[2] - corners[1];
     assert!(edge.len2() > 0.0001);
     let vp = hit_point - corners[1];
-    if vp.len2() < 0.0001 {return None;}
+    if vp.len2() < 0.0001 {
+        return None;
+    }
     if normal.dot(edge.cross(vp)) < 0.0 {
         return None;
     }
@@ -110,7 +117,9 @@ fn ray_triange(from: Point, direction: Vector, corners: [Point; 3]) -> Option<Ra
     let edge = corners[0] - corners[2];
     assert!(edge.len2() > 0.0001);
     let vp = hit_point - corners[2];
-    if vp.len2() < 0.0001 {return None;}
+    if vp.len2() < 0.0001 {
+        return None;
+    }
     if normal.dot(edge.cross(vp)) < 0.0 {
         return None;
     }
