@@ -12,7 +12,7 @@ pub use crate::color::Color;
 pub use crate::matrix::Matrix;
 pub use crate::vector::{Point, Vector};
 
-use crate::object::{Material, Object, Shape};
+use crate::object::{Object, Shape};
 use crate::prelude::float;
 use crate::raycast::raycast;
 
@@ -35,6 +35,7 @@ fn raytrace(
     mut from: Point,
     mut direction: Vector,
     objects: &[object::Object],
+    materials: &[tobj::Material],
     sun: Vector,
 ) -> Color {
     direction = direction.normalized();
@@ -48,16 +49,18 @@ fn raytrace(
             any_hits = true;
 
             let hit_point: Point = from + direction * hit.distance;
-            let material = objects[hit.object].material.clone();
+            if let Some(material_id) = objects[hit.object].material_id {
+                let material = &materials[material_id];
 
-            if material.emits_light {
                 let w = (-direction).dot(hit.normal);
                 assert!(w >= 0.0);
-                acc_color = acc_color + (material.color * mask_color).darken(w);
+                acc_color = acc_color + (Color::from(material.ambient) * mask_color).darken(w);
+                mask_color = mask_color * Color::from(material.diffuse).darken(w);
+            } else {
+                // Default material
+                let w = (-direction).dot(hit.normal);
+                mask_color = mask_color * Color::WHITE.darken(w);
             }
-
-            let w = (-direction).dot(hit.normal);
-            mask_color = mask_color * material.color.darken(w);
 
             let reflection = direction.reflect(hit.normal);
 
@@ -121,112 +124,68 @@ fn main() -> Result<(), Error> {
     })
     .normalized();
 
-    let mut objects = vec![
-        Object {
-            shape: Shape::Sphere {
-                center: Point {
-                    x: 1.0,
-                    y: 0.0,
-                    z: 0.0,
-                },
-                radius: 0.05,
-            },
-            material: Material {
-                color: Color {
-                    r: 1.0,
-                    g: 0.2,
-                    b: 0.2,
-                },
-                emits_light: false,
-            },
-        },
-        Object {
-            shape: Shape::Sphere {
-                center: Point {
-                    x: 1.0,
-                    y: 0.0,
-                    z: 0.5,
-                },
-                radius: 0.05,
-            },
-            material: Material {
-                color: Color::GREEN,
-                emits_light: true,
-            },
-        },
-        Object {
-            shape: Shape::Sphere {
-                center: Point {
-                    x: 1.0,
-                    y: 0.5,
-                    z: 0.0,
-                },
-                radius: 0.05,
-            },
-            material: Material {
-                color: Color::WHITE,
-                emits_light: true,
-            },
-        },
-        Object {
-            shape: Shape::Triangle {
-                corners: [
-                    Point {
-                        x: 1.0,
-                        y: 0.0,
-                        z: 0.0,
-                    },
-                    Point {
-                        x: 1.0,
-                        y: 0.5,
-                        z: 0.0,
-                    },
-                    Point {
-                        x: 1.0,
-                        y: 0.5,
-                        z: 0.5,
-                    },
-                ],
-            },
-            material: Material {
-                color: Color {
-                    r: 1.0,
-                    g: 0.0,
-                    b: 1.0,
-                },
-                emits_light: false,
-            },
-        },
-        Object {
-            shape: Shape::Triangle {
-                corners: [
-                    Point {
-                        x: 1.5,
-                        y: -0.5,
-                        z: 0.0,
-                    },
-                    Point {
-                        x: 0.5,
-                        y: -0.5,
-                        z: -1.0,
-                    },
-                    Point {
-                        x: 0.5,
-                        y: -0.5,
-                        z: 1.0,
-                    },
-                ],
-            },
-            material: Material {
-                color: Color {
-                    r: 1.0,
-                    g: 1.0,
-                    b: 1.0,
-                },
-                emits_light: false,
-            },
-        },
-    ];
+    let mut objects = Vec::new();
+
+    let (models, materials) =
+        tobj::load_obj("objs/cornell_box.obj", false).expect("Failed to load file");
+
+    const SCALE: f32 = 1.0 / 500.0;
+    // const SCALE: f32 = 1.0;
+
+    for (i, model) in models.iter().enumerate() {
+        let mesh = &model.mesh;
+        let mut next_face = 0;
+        for f in 0..mesh.num_face_indices.len() {
+            let end = next_face + mesh.num_face_indices[f] as usize;
+            let face_indices: Vec<_> = mesh.indices[next_face..end].iter().collect();
+
+            match face_indices.len() {
+                3 => {
+                    let mut tri = [Vector::ZERO; 3];
+                    for i in 0..3 {
+                        tri[i] = Vector {
+                            x: mesh.positions[3 * i + 0] * SCALE,
+                            y: mesh.positions[3 * i + 1] * SCALE,
+                            z: mesh.positions[3 * i + 2] * SCALE,
+                        };
+                    }
+                    objects.push(Object {
+                        shape: Shape::Triangle { corners: tri },
+                        material_id: mesh.material_id,
+                    });
+                }
+                4 => {
+                    let mut tri1 = [Vector::ZERO; 3];
+                    let mut tri2 = [Vector::ZERO; 3];
+                    for i in 0..3 {
+                        tri1[i] = Vector {
+                            x: mesh.positions[3 * i + 0] * SCALE,
+                            y: mesh.positions[3 * i + 1] * SCALE,
+                            z: mesh.positions[3 * i + 2] * SCALE,
+                        };
+                    }
+                    for (i, k) in [0usize, 2, 3].iter().copied().enumerate() {
+                        tri2[i] = Vector {
+                            x: mesh.positions[3 * k + 0] * SCALE,
+                            y: mesh.positions[3 * k + 1] * SCALE,
+                            z: mesh.positions[3 * k + 2] * SCALE,
+                        };
+                    }
+                    objects.push(Object {
+                        shape: Shape::Triangle { corners: tri1 },
+                        material_id: mesh.material_id,
+                    });
+                    objects.push(Object {
+                        shape: Shape::Triangle { corners: tri2 },
+                        material_id: mesh.material_id,
+                    });
+                }
+                other => panic!("Unsupported face sides {}", other),
+            }
+
+            next_face = end;
+        }
+    }
 
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
@@ -254,7 +213,13 @@ fn main() -> Result<(), Error> {
                     })
                     .normalized();
 
-                    let color = raytrace(camera.pos(), camera.mul_rotate(p), &objects, sun);
+                    let color = raytrace(
+                        camera.pos(),
+                        camera.mul_rotate(p),
+                        &objects,
+                        &materials,
+                        sun,
+                    );
                     let c = color.to_pixel_color();
 
                     pixel.copy_from_slice(&c);
@@ -343,34 +308,7 @@ fn main() -> Result<(), Error> {
             }
 
             // update
-            let t = (time_start.elapsed().as_micros() as float) / 1_000_000.0;
-
-            if let Shape::Sphere { center, .. } = &mut objects[1].shape {
-                *center = Vector {
-                    x: 1.0 + t.sin() * 0.3,
-                    y: 0.0,
-                    z: t.cos() * 0.3,
-                };
-            }
-
-            if let Shape::Sphere { center, .. } = &mut objects[2].shape {
-                *center = Vector {
-                    x: 1.0 + (t + 3.14).sin() * 0.3,
-                    y: (t + 3.14).cos() * 0.3,
-                    z: 0.0,
-                };
-            }
-
-            for i in 0..3 {
-                let c = if let Shape::Sphere { center, .. } = &objects[i].shape {
-                    *center
-                } else {
-                    panic!()
-                };
-                if let Shape::Triangle { corners, .. } = &mut objects[3].shape {
-                    corners[i] = c;
-                }
-            }
+            // let t = (time_start.elapsed().as_micros() as float) / 1_000_000.0;
 
             window.request_redraw();
         }

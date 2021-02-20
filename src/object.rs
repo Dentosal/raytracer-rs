@@ -1,20 +1,14 @@
 use crate::prelude::*;
-use crate::{Color, Point};
+use crate::Point;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Object {
     pub shape: Shape,
-    pub material: Material,
+    pub material_id: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Shape {
     Sphere { center: Point, radius: float },
     Triangle { corners: [Point; 3] },
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Material {
-    pub color: Color,
-    pub emits_light: bool,
 }

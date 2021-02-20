@@ -107,3 +107,13 @@ impl Mul for Color {
         }
     }
 }
+
+impl From<[f32; 3]> for Color {
+    fn from(color: [f32; 3]) -> Self {
+        Self {
+            r: color[0],
+            g: color[1],
+            b: color[2],
+        }
+    }
+}

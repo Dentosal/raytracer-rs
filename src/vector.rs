@@ -10,6 +10,12 @@ pub struct Vector {
 }
 
 impl Vector {
+    pub const ZERO: Self = Self {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    };
+
     pub fn len(self) -> float {
         self.len2().sqrt()
     }
