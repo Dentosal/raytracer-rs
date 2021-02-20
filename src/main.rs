@@ -129,7 +129,7 @@ fn main() -> Result<(), Error> {
                     y: 0.0,
                     z: 0.0,
                 },
-                radius: 0.2,
+                radius: 0.05,
             },
             material: Material {
                 color: Color {
@@ -143,11 +143,11 @@ fn main() -> Result<(), Error> {
         Object {
             shape: Shape::Sphere {
                 center: Point {
-                    x: 2.0,
+                    x: 1.0,
                     y: 0.0,
-                    z: 0.0,
+                    z: 0.5,
                 },
-                radius: 0.08,
+                radius: 0.05,
             },
             material: Material {
                 color: Color::GREEN,
@@ -157,15 +157,73 @@ fn main() -> Result<(), Error> {
         Object {
             shape: Shape::Sphere {
                 center: Point {
-                    x: 3.0,
-                    y: 0.0,
+                    x: 1.0,
+                    y: 0.5,
                     z: 0.0,
                 },
-                radius: 0.08,
+                radius: 0.05,
             },
             material: Material {
                 color: Color::WHITE,
                 emits_light: true,
+            },
+        },
+        Object {
+            shape: Shape::Triangle {
+                corners: [
+                    Point {
+                        x: 1.0,
+                        y: 0.0,
+                        z: 0.0,
+                    },
+                    Point {
+                        x: 1.0,
+                        y: 0.5,
+                        z: 0.0,
+                    },
+                    Point {
+                        x: 1.0,
+                        y: 0.5,
+                        z: 0.5,
+                    },
+                ],
+            },
+            material: Material {
+                color: Color {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 1.0,
+                },
+                emits_light: false,
+            },
+        },
+        Object {
+            shape: Shape::Triangle {
+                corners: [
+                    Point {
+                        x: 1.5,
+                        y: -0.5,
+                        z: 0.0,
+                    },
+                    Point {
+                        x: 0.5,
+                        y: -0.5,
+                        z: -1.0,
+                    },
+                    Point {
+                        x: 0.5,
+                        y: -0.5,
+                        z: 1.0,
+                    },
+                ],
+            },
+            material: Material {
+                color: Color {
+                    r: 1.0,
+                    g: 1.0,
+                    b: 1.0,
+                },
+                emits_light: false,
             },
         },
     ];
@@ -255,6 +313,30 @@ fn main() -> Result<(), Error> {
                     );
             }
 
+            if input.key_pressed(VirtualKeyCode::Z) {
+                camera = camera
+                    * Matrix::rotation(
+                        Vector {
+                            x: 1.0,
+                            y: 0.0,
+                            z: 0.0,
+                        },
+                        Angle { radians: -0.1 },
+                    );
+            }
+
+            if input.key_pressed(VirtualKeyCode::X) {
+                camera = camera
+                    * Matrix::rotation(
+                        Vector {
+                            x: 1.0,
+                            y: 0.0,
+                            z: 0.0,
+                        },
+                        Angle { radians: 0.1 },
+                    );
+            }
+
             // Resize the window
             if let Some(size) = input.window_resized() {
                 pixels.resize(size.width, size.height);
@@ -277,6 +359,17 @@ fn main() -> Result<(), Error> {
                     y: (t + 3.14).cos() * 0.3,
                     z: 0.0,
                 };
+            }
+
+            for i in 0..3 {
+                let c = if let Shape::Sphere { center, .. } = &objects[i].shape {
+                    *center
+                } else {
+                    panic!()
+                };
+                if let Shape::Triangle { corners, .. } = &mut objects[3].shape {
+                    corners[i] = c;
+                }
             }
 
             window.request_redraw();
