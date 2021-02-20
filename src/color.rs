@@ -42,7 +42,11 @@ impl Color {
 
     #[must_use]
     pub fn darken(self, ratio: float) -> Self {
-        assert!(ratio >= 0.0 && ratio <= 1.001, "Ratio over 1.0: {}", ratio);
+        assert!(
+            ratio >= 0.0 && ratio <= 1.001,
+            "Ratio out of range: {}",
+            ratio
+        );
 
         let ratio = ratio.clamp(0.0, 1.0);
 
@@ -55,7 +59,11 @@ impl Color {
 
     #[must_use]
     pub fn mix(self, other: Self, ratio: float) -> Self {
-        assert!(ratio >= 0.0 && ratio <= 1.001, "Ratio over 1.0: {}", ratio);
+        assert!(
+            ratio >= 0.0 && ratio <= 1.001,
+            "Ratio out of range: {}",
+            ratio
+        );
 
         let ratio = ratio.clamp(0.0, 1.0);
 
