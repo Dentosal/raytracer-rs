@@ -75,7 +75,16 @@ fn ray_triange(from: Point, direction: Vector, corners: [Point; 3]) -> Option<Ra
         return None;
     }
 
-    let normal = edge1.cross(edge2).normalized();
+    let normal = edge1.normalized().cross(edge2.normalized());
+    if normal.len2() < 0.0001 {
+        println!("{:?}", edge1);
+        println!("{:?}", edge2);
+        println!("{:?}", normal);
+        panic!("!!");
+        // return None;
+    }
+    
+    let normal = normal.normalized();
 
     // Is parallel?
     if normal.dot(direction).abs() < 0.000001 {
@@ -95,7 +104,7 @@ fn ray_triange(from: Point, direction: Vector, corners: [Point; 3]) -> Option<Ra
     // Inside-outside test for each edge
 
     let edge = corners[1] - corners[0];
-    assert!(edge.len2() > 0.0001);
+    // assert!(edge.len2() > 0.0001);
     let vp = hit_point - corners[0];
     if vp.len2() < 0.0001 {
         return None;
@@ -105,7 +114,7 @@ fn ray_triange(from: Point, direction: Vector, corners: [Point; 3]) -> Option<Ra
     }
 
     let edge = corners[2] - corners[1];
-    assert!(edge.len2() > 0.0001);
+    // assert!(edge.len2() > 0.0001);
     let vp = hit_point - corners[1];
     if vp.len2() < 0.0001 {
         return None;
@@ -115,7 +124,7 @@ fn ray_triange(from: Point, direction: Vector, corners: [Point; 3]) -> Option<Ra
     }
 
     let edge = corners[0] - corners[2];
-    assert!(edge.len2() > 0.0001);
+    // assert!(edge.len2() > 0.0001);
     let vp = hit_point - corners[2];
     if vp.len2() < 0.0001 {
         return None;

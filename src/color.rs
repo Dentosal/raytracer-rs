@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-use std::ops::{Add, Mul};
+use std::ops::{Add, Div, Mul};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Color {
@@ -89,9 +89,9 @@ impl Add for Color {
 
     fn add(self, rhs: Self) -> Self {
         Self {
-            r: (self.r + rhs.r).clamp(0.0, 1.0),
-            g: (self.g + rhs.g).clamp(0.0, 1.0),
-            b: (self.b + rhs.b).clamp(0.0, 1.0),
+            r: self.r + rhs.r,
+            g: self.g + rhs.g,
+            b: self.b + rhs.b,
         }
     }
 }
@@ -104,6 +104,18 @@ impl Mul for Color {
             r: (self.r * rhs.r),
             g: (self.g * rhs.g),
             b: (self.b * rhs.b),
+        }
+    }
+}
+
+impl Div<float> for Color {
+    type Output = Self;
+
+    fn div(self, rhs: float) -> Self {
+        Self {
+            r: (self.r / rhs),
+            g: (self.g / rhs),
+            b: (self.b / rhs),
         }
     }
 }

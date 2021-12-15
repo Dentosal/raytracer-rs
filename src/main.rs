@@ -1,3 +1,5 @@
+#![feature(const_fn_floating_point_arithmetic)]
+
 pub mod prelude;
 
 mod angle;
@@ -26,10 +28,17 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
-const WIDTH: u32 = 640;
-const HEIGHT: u32 = 480;
+// const WIDTH: u32 = 640;
+// const HEIGHT: u32 = 480;
 
-const BOUNCES: usize = 5;
+const WIDTH: u32 = 64*2;
+const HEIGHT: u32 = 48*2;
+
+const BOUNCES: usize = 3;
+
+fn random_nudge(vector: Vector, weigth: float) -> Vector {
+    (vector + Vector::random_spherepoint() * weigth).normalized()
+}
 
 fn raytrace(
     mut from: Point,
@@ -64,6 +73,13 @@ fn raytrace(
 
             let reflection = direction.reflect(hit.normal);
 
+            // let reflection = if reflect_mode {
+            //     direction.reflect(hit.normal)
+            // } else {
+            //     Vector::random_spherepoint().normalized()
+                // random_nudge(hit.normal, 0.8)
+            // };
+
             // Epsilon hack to avoid self-collision
             direction = (reflection + hit.normal * 1.0001).normalized();
             from = hit_point;
@@ -75,7 +91,7 @@ fn raytrace(
             }
 
             // Skybox
-            acc_color = acc_color + (Color::WHITE * mask_color).darken(0.1);
+            acc_color = acc_color + (Color::WHITE * mask_color).darken(0.4);
 
             break;
         }
@@ -127,61 +143,32 @@ fn main() -> Result<(), Error> {
     let mut objects = Vec::new();
 
     let (models, materials) =
-        tobj::load_obj("objs/cornell_box.obj", false).expect("Failed to load file");
+        tobj::load_obj("objs/cornell_box.obj", true).expect("Failed to load file");
 
-    const SCALE: f32 = 1.0 / 500.0;
+    const SCALE: f32 = 1.0 / 4.0;
     // const SCALE: f32 = 1.0;
 
-    for (i, model) in models.iter().enumerate() {
+    for model in models.iter() {
         let mesh = &model.mesh;
         let mut next_face = 0;
         for f in 0..mesh.num_face_indices.len() {
             let end = next_face + mesh.num_face_indices[f] as usize;
             let face_indices: Vec<_> = mesh.indices[next_face..end].iter().collect();
 
-            match face_indices.len() {
-                3 => {
-                    let mut tri = [Vector::ZERO; 3];
-                    for i in 0..3 {
-                        tri[i] = Vector {
-                            x: mesh.positions[3 * i + 0] * SCALE,
-                            y: mesh.positions[3 * i + 1] * SCALE,
-                            z: mesh.positions[3 * i + 2] * SCALE,
-                        };
-                    }
-                    objects.push(Object {
-                        shape: Shape::Triangle { corners: tri },
-                        material_id: mesh.material_id,
-                    });
-                }
-                4 => {
-                    let mut tri1 = [Vector::ZERO; 3];
-                    let mut tri2 = [Vector::ZERO; 3];
-                    for i in 0..3 {
-                        tri1[i] = Vector {
-                            x: mesh.positions[3 * i + 0] * SCALE,
-                            y: mesh.positions[3 * i + 1] * SCALE,
-                            z: mesh.positions[3 * i + 2] * SCALE,
-                        };
-                    }
-                    for (i, k) in [0usize, 2, 3].iter().copied().enumerate() {
-                        tri2[i] = Vector {
-                            x: mesh.positions[3 * k + 0] * SCALE,
-                            y: mesh.positions[3 * k + 1] * SCALE,
-                            z: mesh.positions[3 * k + 2] * SCALE,
-                        };
-                    }
-                    objects.push(Object {
-                        shape: Shape::Triangle { corners: tri1 },
-                        material_id: mesh.material_id,
-                    });
-                    objects.push(Object {
-                        shape: Shape::Triangle { corners: tri2 },
-                        material_id: mesh.material_id,
-                    });
-                }
-                other => panic!("Unsupported face sides {}", other),
+            assert_eq!(face_indices.len(), 3);
+            let mut tri = [Vector::ZERO; 3];
+            for i in 0..3 {
+                let k = *face_indices[i] as usize;
+                tri[i] = Vector {
+                    x: mesh.positions[3 * k + 0] * SCALE,
+                    y: mesh.positions[3 * k + 1] * SCALE,
+                    z: mesh.positions[3 * k + 2] * SCALE,
+                };
             }
+            objects.push(Object {
+                shape: Shape::Triangle { corners: tri },
+                material_id: mesh.material_id,
+            });
 
             next_face = end;
         }
@@ -213,14 +200,30 @@ fn main() -> Result<(), Error> {
                     })
                     .normalized();
 
-                    let color = raytrace(
-                        camera.pos(),
-                        camera.mul_rotate(p),
-                        &objects,
-                        &materials,
-                        sun,
-                    );
+                    let rays = 1;
+
+                    let mut sum = Color::BLACK;
+                    for i in 0..rays {
+                        sum = sum
+                            + raytrace(
+                                camera.pos(),
+                                camera.mul_rotate(p),
+                                &objects,
+                                &materials,
+                                sun,
+                            );
+                    }
+
+                    let color = sum / (rays as float);
+
                     let c = color.to_pixel_color();
+
+                    // let c = [
+                    //     4 * pixel[0] / 5 + c[0] / 5,
+                    //     4 * pixel[1] / 5 + c[1] / 5,
+                    //     4 * pixel[2] / 5 + c[2] / 5,
+                    //     0xff
+                    // ];
 
                     pixel.copy_from_slice(&c);
                 });
@@ -234,6 +237,24 @@ fn main() -> Result<(), Error> {
             if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
                 *control_flow = ControlFlow::Exit;
                 return;
+            }
+
+            if input.key_pressed(VirtualKeyCode::Q) {
+                camera = camera
+                    * Matrix::translation(Vector {
+                        x: 0.0,
+                        y: 0.1,
+                        z: 0.0,
+                    });
+            }
+
+            if input.key_pressed(VirtualKeyCode::E) {
+                camera = camera
+                    * Matrix::translation(Vector {
+                        x: 0.0,
+                        y: -0.1,
+                        z: 0.0,
+                    });
             }
 
             if input.key_pressed(VirtualKeyCode::W) {

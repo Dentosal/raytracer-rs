@@ -1,4 +1,6 @@
 use crate::prelude::*;
+use rand::prelude::*;
+use rand_distr::{Distribution, Normal};
 
 use std::ops::{Add, Mul, Neg, Sub};
 
@@ -53,6 +55,44 @@ impl Vector {
     /// https://math.stackexchange.com/a/13266/300156
     pub fn reflect(self, normal: Self) -> Self {
         self - normal * (2.0 * self.dot(normal) / self.len2())
+    }
+
+    /// Random unit vector
+    /// https://stackoverflow.com/a/8453514/2867076
+    pub fn random() -> Self {
+        // Gaussian
+        let normal = Normal::new(0.0, 1.0).unwrap();
+        let mut rng = rand::thread_rng();
+        (Self {
+            x: normal.sample(&mut rng),
+            y: normal.sample(&mut rng),
+            z: normal.sample(&mut rng),
+        })
+        .normalized()
+    }
+
+    /// Random point inside an unit sphere
+    /// https://math.stackexchange.com/a/87238/300156
+    /// Computed in constant time unline with the discard method,
+    /// but is about 10% slower on average (see benchmark).
+    pub fn random_spherepoint_const() -> Self {
+        let r: float = rand::random::<float>().cbrt();
+        Self::random() * r
+    }
+
+    /// Random point inside an unit sphere
+    /// using discard method
+    pub fn random_spherepoint() -> Self {
+        loop {
+            let v = Self {
+                x: rand::random::<float>() * 2.0 - 1.0,
+                y: rand::random::<float>() * 2.0 - 1.0,
+                z: rand::random::<float>() * 2.0 - 1.0,
+            };
+            if v.len2() <= 1.0 {
+                return v;
+            }
+        }
     }
 }
 
